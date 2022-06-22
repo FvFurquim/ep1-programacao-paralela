@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <pthread.h>
+#include <time.h>
 
 double c_x_min;
 double c_x_max;
@@ -18,6 +20,10 @@ unsigned char **image_buffer;
 int i_x_max;
 int i_y_max;
 int image_buffer_size;
+
+int nthreads;
+int current_iy;
+pthread_mutex_t stacklock = PTHREAD_MUTEX_INITIALIZER;
 
 int gradient_size = 16;
 int colors[17][3] = {
@@ -111,7 +117,7 @@ void write_to_file(){
     fclose(file);
 };
 
-void compute_mandelbrot(){
+void *compute_mandelbrot(void *threadid){
     double z_x;
     double z_y;
     double z_x_squared;
@@ -125,7 +131,11 @@ void compute_mandelbrot(){
     double c_x;
     double c_y;
 
-    for(i_y = 0; i_y < i_y_max; i_y++){
+    pthread_mutex_lock(&stacklock);
+    i_y = current_iy++;
+    pthread_mutex_unlock(&stacklock);
+
+    while (i_y < image_size){
         c_y = c_y_min + i_y * pixel_height;
 
         if(fabs(c_y) < pixel_height / 2){
@@ -154,17 +164,76 @@ void compute_mandelbrot(){
 
             update_rgb_buffer(iteration, i_x, i_y);
         };
+
+        pthread_mutex_lock(&stacklock);
+        i_y = current_iy++;
+        pthread_mutex_unlock(&stacklock);
     };
+
+    pthread_exit(NULL);
 };
 
 int main(int argc, char *argv[]){
+    struct timespec start_a, start_b, start_c, start_d, start_e, stop, start, end;
+    double duration;
+
+    clock_gettime(CLOCK_MONOTONIC, &start_a);
     init(argc, argv);
 
+    clock_gettime(CLOCK_MONOTONIC, &start_b);
     allocate_image_buffer();
 
-    compute_mandelbrot();
+    clock_gettime(CLOCK_MONOTONIC, &start_c);
 
+    // Pthread start
+    pthread_t *threads = malloc(sizeof(pthread_t)*nthreads);
+    int errorcode;
+
+    long t;
+    for(t = 0; t < nthreads; t++){
+        errorcode = pthread_create(&threads[t], NULL, compute_mandelbrot, (void *) t);
+        if (errorcode) {
+            printf("ERROR pthread_create(): %d\n", errorcode);
+            exit(-1);
+        };
+    };
+    for(t = 0; t < nthreads; t++) {
+        pthread_join(threads[t], NULL);
+    }
+    // Pthread end
+
+
+    clock_gettime(CLOCK_MONOTONIC, &start_d);
     write_to_file();
+
+    clock_gettime(CLOCK_MONOTONIC, &stop);
+
+
+    for(int i = 0; i < argc; i++){
+        printf("%s ", argv[i]);
+    }
+
+    printf(";");
+
+    duration = ((double)start_b.tv_sec + 1.0e-9*start_b.tv_nsec) -
+                ((double)start_a.tv_sec + 1.0e-9*start_a.tv_nsec); 
+    printf( "%.5lf;", duration);
+
+    duration = ((double)start_c.tv_sec + 1.0e-9*start_c.tv_nsec) - 
+                ((double)start_b.tv_sec + 1.0e-9*start_b.tv_nsec); 
+    printf( "%.5lf;", duration);
+
+    duration = ((double)start_d.tv_sec + 1.0e-9*start_d.tv_nsec) - 
+                ((double)start_c.tv_sec + 1.0e-9*start_c.tv_nsec); 
+    printf( "%.5lf;", duration);
+
+    duration = ((double)stop.tv_sec + 1.0e-9*stop.tv_nsec) - 
+                ((double)start_d.tv_sec + 1.0e-9*start_d.tv_nsec); 
+    printf( "%.5lf;", duration);
+
+    duration = ((double)stop.tv_sec + 1.0e-9*stop.tv_nsec) - 
+                ((double)start_a.tv_sec + 1.0e-9*start_a.tv_nsec); 
+    printf( "%.5lf;\n", duration);
 
     return 0;
 };
