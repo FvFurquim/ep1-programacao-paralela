@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <omp.h>
+#include <time.h>
 
 double c_x_min;
 double c_x_max;
@@ -18,6 +20,8 @@ unsigned char **image_buffer;
 int i_x_max;
 int i_y_max;
 int image_buffer_size;
+
+int nthreads;
 
 int gradient_size = 16;
 int colors[17][3] = {
@@ -125,6 +129,16 @@ void compute_mandelbrot(){
     double c_x;
     double c_y;
 
+    int color;
+
+    omp_set_num_threads(nthreads);
+
+    #pragma omp parallel for \
+        default(shared) \
+        shared(image_buffer) \
+        private( c_x, c_y, z_x, z_y, z_x_squared, z_y_squared, iteration, i_x, i_y, color ) \
+        schedule(dynamic, 16)
+
     for(i_y = 0; i_y < i_y_max; i_y++){
         c_y = c_y_min + i_y * pixel_height;
 
@@ -158,13 +172,49 @@ void compute_mandelbrot(){
 };
 
 int main(int argc, char *argv[]){
+    struct timespec start_a, start_b, start_c, start_d, start_e, stop, start, end;
+    float duration;
+    
+    clock_gettime(CLOCK_MONOTONIC, &start_a);
+
     init(argc, argv);
 
+    clock_gettime(CLOCK_MONOTONIC, &start_b);
     allocate_image_buffer();
 
+    clock_gettime(CLOCK_MONOTONIC, &start_c);
     compute_mandelbrot();
 
+    clock_gettime(CLOCK_MONOTONIC, &start_d);
     write_to_file();
+
+    clock_gettime(CLOCK_MONOTONIC, &stop);
+
+    for(int i = 0; i < argc; i++){
+        printf("%s ", argv[i]);
+    }
+
+    printf(";");
+
+    duration = ((double)start_b.tv_sec + 1.0e-9*start_b.tv_nsec) -
+                ((double)start_a.tv_sec + 1.0e-9*start_a.tv_nsec); 
+    printf( "%.5lf;", duration0);
+
+    duration = ((double)start_c.tv_sec + 1.0e-9*start_c.tv_nsec) - 
+                ((double)start_b.tv_sec + 1.0e-9*start_b.tv_nsec); 
+    printf( "%.5lf;", duration);
+
+    duration = ((double)start_d.tv_sec + 1.0e-9*start_d.tv_nsec) - 
+                ((double)start_c.tv_sec + 1.0e-9*start_c.tv_nsec); 
+    printf( "%.5lf;", duration);
+
+    duration = ((double)stop.tv_sec + 1.0e-9*stop.tv_nsec) - 
+                ((double)start_d.tv_sec + 1.0e-9*start_d.tv_nsec); 
+    printf( "%.5lf;", duration);
+
+    duration = ((double)stop.tv_sec + 1.0e-9*stop.tv_nsec) - 
+                ((double)start_a.tv_sec + 1.0e-9*start_a.tv_nsec); 
+    printf( "%.5lf;\n", duration);
 
     return 0;
 };
