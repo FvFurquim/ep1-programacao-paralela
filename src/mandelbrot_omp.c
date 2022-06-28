@@ -199,7 +199,7 @@ int main(int argc, char *argv[]){
 
     duration = ((double)start_b.tv_sec + 1.0e-9*start_b.tv_nsec) -
                 ((double)start_a.tv_sec + 1.0e-9*start_a.tv_nsec); 
-    printf( "%.5lf;", duration0);
+    printf( "%.5lf;", duration);
 
     duration = ((double)start_c.tv_sec + 1.0e-9*start_c.tv_nsec) - 
                 ((double)start_b.tv_sec + 1.0e-9*start_b.tv_nsec); 
